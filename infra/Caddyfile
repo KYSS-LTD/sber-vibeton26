@@ -1,3 +1,7 @@
+{
+	default_sni {$APP_HOST:localhost}
+}
+
 {$APP_HOST:localhost} {
 	tls internal
 	encode zstd gzip

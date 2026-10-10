@@ -24,7 +24,7 @@ compose=(docker compose -p "$project")
 "${compose[@]}" up -d postgres
 ready=0
 for ((attempt=0; attempt<60; attempt++)); do
-  if "${compose[@]}" exec -T postgres pg_isready -U prohod_owner -d prohod >/dev/null 2>&1; then ready=1; break; fi
+  if "${compose[@]}" exec -T postgres pg_isready -h 127.0.0.1 -U prohod_owner -d prohod >/dev/null 2>&1; then ready=1; break; fi
   sleep 2
 done
 [[ "$ready" == 1 ]] || { echo 'PostgreSQL did not become ready' >&2; exit 1; }

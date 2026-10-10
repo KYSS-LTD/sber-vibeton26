@@ -4,8 +4,32 @@ from unittest.mock import Mock
 from uuid import uuid4
 import httpx
 import pytest
+import json
+from pathlib import Path
 from app import llm
 from app.db import Actor
+
+
+@pytest.mark.parametrize("valid_digest", [True, False])
+def test_ollama_init_verifies_digest_before_gateway_warmup(monkeypatch, valid_digest):
+    from app import bootstrap
+
+    pinned = json.loads((Path(bootstrap.__file__).parent.parent / "llm-model.json").read_text())
+    def respond(request):
+        if request.url.path == "/api/pull":
+            return httpx.Response(200, json={"status": "success"})
+        return httpx.Response(200, json={"models": [{"name": pinned["name"], "digest": pinned["digest"] if valid_digest else "0" * 64}]})
+    original = httpx.Client
+    monkeypatch.setattr(bootstrap.httpx, "Client", lambda **kwargs: original(transport=httpx.MockTransport(respond), **kwargs))
+    complete = Mock(return_value={"tools": ["onsite_now"]})
+    monkeypatch.setattr(llm.gateway, "complete", complete)
+    if valid_digest:
+        bootstrap.ollama()
+        assert complete.call_count == 1 and complete.call_args.args[0] == "ollama"
+    else:
+        with pytest.raises(RuntimeError, match="digest changed"):
+            bootstrap.ollama()
+        complete.assert_not_called()
 
 
 def test_gigachat_uses_oauth_and_real_completion_contract(monkeypatch):

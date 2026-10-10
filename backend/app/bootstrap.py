@@ -470,6 +470,16 @@ def ollama():
                     raise RuntimeError(
                         "Ollama model digest changed; review llm-model.json before updating"
                     )
+            # Warm the same constrained inference path used by the assistant.
+            # Initial CUDA compilation must finish during setup, before users ask.
+            from .llm import gateway, PROMPTS, TOOLS
+
+            gateway.complete(
+                "ollama",
+                (PROMPTS / "select.txt").read_text(encoding="utf-8"),
+                {"question": "Сколько сотрудников сейчас на объекте?"},
+                TOOLS["selection_schema"],
+            )
             return
         except httpx.HTTPError:
             time.sleep(2)

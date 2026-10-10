@@ -20,7 +20,7 @@ try {
     }
     DockerStep @('compose','-p',$Project,'up','-d','postgres')
     for ($attempt=0;$attempt -lt 60;$attempt++) {
-        & docker compose -p $Project exec -T postgres pg_isready -U prohod_owner -d prohod | Out-Null
+        & docker compose -p $Project exec -T postgres pg_isready -h 127.0.0.1 -U prohod_owner -d prohod | Out-Null
         if ($LASTEXITCODE -eq 0) { break }
         Start-Sleep -Seconds 2
     }

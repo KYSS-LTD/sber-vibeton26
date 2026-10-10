@@ -108,6 +108,8 @@ services:
     restart: 'no'
   ollama:
     image: ollama/ollama:0.12.3@sha256:c622a7adec67cf5bd7fe1802b7e26aa583a955a54e91d132889301f50c3e0bd0
+    environment:
+      CUDA_CACHE_PATH: /root/.ollama/cuda-cache
     volumes: [ollama:/root/.ollama]
     restart: unless-stopped
   llm-init:
@@ -180,8 +182,6 @@ services:
     environment:
       E2E_BASE_URL: ${PUBLIC_ORIGIN:-https://localhost}
       E2E_ACCOUNTS_FILE: /bootstrap/accounts.json
-    extra_hosts:
-      - '${APP_HOST:-localhost}:127.0.0.1'
     volumes:
       - bootstrap_secrets:/bootstrap:ro
     depends_on:
