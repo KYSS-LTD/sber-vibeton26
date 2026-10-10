@@ -10,8 +10,18 @@ mkdir -p "$destination"
 destination=$(realpath "$destination")
 compose=(docker compose -p "$project")
 image='python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e'
-resume() { "${compose[@]}" start postgres s3 keycloak backend worker storage-worker frontend; }
+host_caddy_active=0
+resume() {
+  local status=0
+  "${compose[@]}" start postgres s3 keycloak backend worker storage-worker frontend || status=$?
+  if [[ "$host_caddy_active" == 1 ]]; then systemctl start caddy || status=$?; fi
+  return "$status"
+}
 trap resume EXIT
+if [[ "$project" == prohod ]] && command -v systemctl >/dev/null && systemctl is-active --quiet caddy; then
+  host_caddy_active=1
+  systemctl stop caddy
+fi
 "${compose[@]}" stop backend worker storage-worker frontend keycloak
 for database in prohod keycloak; do
   "${compose[@]}" exec -T postgres sh -c "PGPASSWORD=\$(cat /bootstrap/db_owner) pg_dump -U prohod_owner -d $database -Fc -f /tmp/$database.dump"
@@ -24,6 +34,18 @@ for kind in objects bootstrap_secrets runtime_secrets certificates; do
     --mount "type=bind,source=$destination,target=/backup" "$image" \
     tar czf "/backup/$kind.tar.gz" -C /source .
 done
+if [[ "$project" == prohod && -f /etc/caddy/Caddyfile && -d /var/lib/caddy/.local/share/caddy ]]; then
+  tar czf "$destination/host-caddy.tar.gz" -C / etc/caddy \
+    etc/systemd/system/caddy.service var/lib/caddy/.local/share/caddy
+fi
+# Retain the public origin and the GPU/loopback override together with the data.
+mkdir "$destination/deployment-config"
+cp compose.yaml "$destination/deployment-config/"
+for file in .env compose.override.yaml; do
+  if [[ -f "$file" ]]; then cp "$file" "$destination/deployment-config/"; fi
+done
+tar czf "$destination/deployment-config.tar.gz" -C "$destination/deployment-config" .
+rm -r -- "$destination/deployment-config"
 printf '{"format":1,"project":"%s","created_at":"%s"}\n' "$project" "$(date -u +%FT%TZ)" > "$destination/manifest.json"
 (cd "$destination" && sha256sum *.dump *.tar.gz manifest.json > checksums.sha256)
 chmod 600 "$destination"/*

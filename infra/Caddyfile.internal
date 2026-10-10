@@ -1,0 +1,27 @@
+{
+	auto_https off
+}
+
+:8080 {
+	encode zstd gzip
+	request_body {
+		max_size 26MB
+	}
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		Permissions-Policy "camera=(self), geolocation=(self), microphone=()"
+	}
+	@api path /api/*
+	reverse_proxy @api backend:8000 {
+		header_up X-Forwarded-Proto https
+		flush_interval -1
+	}
+	@auth path /auth/*
+	reverse_proxy @auth keycloak:8080 {
+		header_up X-Forwarded-Proto https
+	}
+	reverse_proxy frontend:3000 {
+		header_up X-Forwarded-Proto https
+	}
+}

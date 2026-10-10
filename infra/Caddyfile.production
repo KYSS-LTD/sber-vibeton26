@@ -1,0 +1,9 @@
+kyssltd.ru {
+	reverse_proxy 127.0.0.1:8080 {
+		flush_interval -1
+	}
+}
+
+http://195.209.221.213 {
+	redir https://kyssltd.ru{uri} permanent
+}
