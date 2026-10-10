@@ -45,9 +45,9 @@ Keycloak administration: `/auth/admin/`. Bootstrap login `kcadmin`; его от�
 
 ## Провайдеры LLM
 
-По умолчанию Ollama `qwen3:0.6b`; digest фиксируется в `backend/llm-model.json` и проверяется init-контейнером. Для GigaChat задать `GIGACHAT_AUTH_KEY` и `GIGACHAT_SCOPE` в `.env`, перезапустить backend. При необходимости доверенного CA положить PEM в `infra/ca/` и задать `GIGACHAT_CA_FILE=/certificates/<имя>.pem`; проверка TLS никогда не отключается. Провайдер выбирается администратором в «Управление», затем проверяется через «Помощник».
+По умолчанию Ollama `qwen3:0.6b`; digest фиксируется в `backend/llm-model.json` и проверяется init-контейнером. Для GigaChat задать `GIGACHAT_AUTH_KEY` и `GIGACHAT_SCOPE` в `.env`, перезапустить backend. Набор публичных корневых сертификатов лежит в `infra/ca/` и уже указан в `.env.example` (`GIGACHAT_CA_FILE=/certificates/russian_trusted_ca_bundle.pem`); для другого центра положить свой PEM рядом и изменить путь. Проверка TLS никогда не отключается. Провайдер выбирается администратором в «Управление», затем проверяется через «Помощник».
 
-Модель выбирает инструменты; SQL задаёт сервер. Сводка состоит из фактов, полученных из БД, с проверенными идентификаторами. Подробности — в `docs/architecture.md`; шаблоны — `backend/prompts`.
+Модель выбирает инструменты; SQL задаёт сервер. Сводка состоит из фактов, полученных из БД, с проверенными идентификаторами. Пошаговая инструкция по локальной модели (запуск, проверка, офлайн, замена) — [docs/local-model.md](docs/local-model.md); шаблоны — `backend/prompts`.
 
 ## Проверка
 
@@ -69,3 +69,20 @@ GPS передаётся только при открытой смене, сра
 Порог SFace `0.45` и PAD `0.8` — исходные настройки, не сертифицированные показатели качества. Перед эксплуатацией выполнить проверку на реальных сотрудниках/камерах; документировать ложные отказы и ложные допуски.
 
 Резервное копирование и восстановление описаны в `docs/operations.md`. `docker compose down` сохраняет данные; `down -v` удаляет тома и не используется для обычного обновления.
+
+Полный перечень ограничений, порядок измерения биометрии и планы — [docs/limitations.md](docs/limitations.md).
+
+## Документация
+
+| Документ | О чём |
+|---|---|
+| [docs/solution-scheme.md](docs/solution-scheme.md) | Схема решения: компоненты и последовательность прохода |
+| [docs/architecture.md](docs/architecture.md) | Доступ, данные, проход, GPS и аналитика, S3, помощник |
+| [docs/decisions.md](docs/decisions.md) | Журнал решений |
+| [docs/local-model.md](docs/local-model.md) | Инструкция по локальной модели и GigaChat |
+| [docs/limitations.md](docs/limitations.md) | Ограничения и планы |
+| [docs/ai-usage.md](docs/ai-usage.md) | Отчёт об использовании ИИ |
+| [docs/code-map.md](docs/code-map.md) | Карта кода и типичные изменения |
+| [docs/deployment.md](docs/deployment.md), [docs/operations.md](docs/operations.md) | Сервер, резервные копии, обновление |
+| [docs/acceptance.md](docs/acceptance.md), [docs/testing.md](docs/testing.md) | Матрица приёмки и фактические результаты |
+| [docs/third-party.md](docs/third-party.md) | Сторонние компоненты и лицензии |
