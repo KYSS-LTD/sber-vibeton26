@@ -126,7 +126,7 @@ def start_attempt(conn, actor, session_id, token, direction):
     attempt_id = uuid4()
     nonce = secrets.token_urlsafe(32)
     deadline = utcnow() + timedelta(seconds=30)
-    actions = secrets.choice([["left", "right"], ["right", "left"]])
+    actions = ["front"]  # only a straight look; column kept for existing rows
     challenge = canonical_challenge(
         attempt_id=str(attempt_id),
         employee_id=str(employee["id"]),

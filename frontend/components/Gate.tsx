@@ -4,6 +4,11 @@ import { BrowserQRCodeReader, IScannerControls } from "@zxing/browser";
 import { Camera, ScanLine, ShieldCheck } from "lucide-react";
 import { api } from "../lib/api";
 
+const FRAME_COUNT = 16;
+const FRAME_INTERVAL_MS = 250;
+const MAX_FRAME_SIDE = 1280;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function Gate({
   siteId,
   onError,
@@ -13,7 +18,8 @@ export function Gate({
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
-  const scanner = useRef<IScannerControls | null>(null);
+  const cameraRequest = useRef(0);
+  const rejected = useRef({ token: "", until: 0 });
   const [session, setSession] = useState("");
   const [checkpoint, setCheckpoint] = useState("");
   const [checkpoints, setCheckpoints] = useState<any[]>([]);
@@ -30,6 +36,7 @@ export function Gate({
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const alive = useRef(true);
+  const busy = stage === "scan" || stage === "capture" || stage === "verify";
   const refresh = () =>
     api<any[]>(`/sites/${siteId}/journal`)
       .then(setJournal)
@@ -56,75 +63,80 @@ export function Gate({
     alive.current = true;
     return () => {
       alive.current = false;
-      scanner.current?.stop();
       stream.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
-  async function openCamera() {
+  // choice: "" = фронтальная, "environment" = основная, иначе точный deviceId.
+  async function openCamera(choice = deviceId) {
+    const request = ++cameraRequest.current;
+    // Выключаем камеру: эффект сканера QR останавливается и заново запускается
+    // для нового потока, когда camera снова станет true.
+    setCamera(false);
+    stream.current?.getTracks().forEach((t) => t.stop());
+    stream.current = null;
     try {
-      scanner.current?.stop();
-      stream.current?.getTracks().forEach((t) => t.stop());
-      stream.current = await navigator.mediaDevices.getUserMedia({
-        video: deviceId
-          ? {
-              deviceId: { exact: deviceId },
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-            }
-          : {
-              facingMode: "user",
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-            },
+      const next = await navigator.mediaDevices.getUserMedia({
+        video: {
+          ...(choice === "environment"
+            ? { facingMode: { ideal: "environment" } }
+            : choice
+              ? { deviceId: { exact: choice } }
+              : { facingMode: "user" }),
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: false,
       });
+      if (request !== cameraRequest.current || !alive.current) {
+        next.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      stream.current = next;
       setDevices(
         (await navigator.mediaDevices.enumerateDevices()).filter(
           (d) => d.kind === "videoinput",
         ),
       );
-      video.current!.srcObject = stream.current;
+      video.current!.srcObject = next;
       await video.current!.play();
+      if (request !== cameraRequest.current) return;
+      stageRef.current = "ready";
       setCamera(true);
       setStage("ready");
       setInstruction("Наведите камеру на QR сотрудника");
     } catch (e) {
+      if (request !== cameraRequest.current) return;
+      stageRef.current = "idle";
+      setStage("idle");
+      setInstruction("Камера выключена");
       onError("Камера недоступна. Проверьте разрешение браузера и HTTPS.");
     }
   }
   async function capture(row: any) {
     setStage("capture");
     stageRef.current = "capture";
-    scanner.current?.stop();
+    setInstruction("Смотрите прямо в камеру");
     const frames: Blob[] = [];
+    const element = video.current!;
+    // Сохраняем пропорции камеры: растягивание кадра в 640x480 искажало лицо
+    // (особенно у портретной камеры телефона) и размывало изображение.
+    const scale = Math.min(
+      1,
+      MAX_FRAME_SIDE / Math.max(element.videoWidth, element.videoHeight),
+    );
     const canvas = document.createElement("canvas");
-    canvas.width = 640;
-    canvas.height = 480;
+    canvas.width = Math.round(element.videoWidth * scale);
+    canvas.height = Math.round(element.videoHeight * scale);
     const context = canvas.getContext("2d")!;
-    const start = performance.now();
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < FRAME_COUNT; i++) {
       if (!alive.current) return;
-      const elapsed = performance.now() - start;
-      const action =
-        elapsed < 2000
-          ? "Смотрите прямо"
-          : elapsed < 4000
-            ? row.actions[0] === "left"
-              ? "Поверните голову влево"
-              : "Поверните голову вправо"
-            : elapsed < 6000
-              ? row.actions[1] === "left"
-                ? "Поверните голову влево"
-                : "Поверните голову вправо"
-              : "Снова смотрите прямо";
-      setInstruction(action);
-      context.drawImage(video.current!, 0, 0, 640, 480);
+      context.drawImage(element, 0, 0, canvas.width, canvas.height);
       const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/jpeg", 0.8),
+        canvas.toBlob(resolve, "image/jpeg", 0.92),
       );
       if (blob) frames.push(blob);
-      await new Promise((resolve) => setTimeout(resolve, 340));
+      await sleep(FRAME_INTERVAL_MS);
     }
     setStage("verify");
     setInstruction("Сервер проверяет лицо и подтверждение телефона…");
@@ -151,6 +163,9 @@ export function Gate({
   }
   async function scanned(token: string) {
     if (stageRef.current !== "ready" || !session) return;
+    // Тот же отклонённый QR остаётся перед камерой: не долбим сервер повторно.
+    if (token === rejected.current.token && Date.now() < rejected.current.until)
+      return;
     stageRef.current = "scan";
     setStage("scan");
     try {
@@ -165,27 +180,45 @@ export function Gate({
       setAttempt(row);
       await capture(row);
     } catch (e: any) {
+      rejected.current = { token, until: Date.now() + 4000 };
       onError(e.message);
       setStage("ready");
       stageRef.current = "ready";
     }
   }
   useEffect(() => {
-    if (!camera || stage !== "ready" || !session || !video.current) return;
-    const reader = new BrowserQRCodeReader();
-    let stop = false;
-    reader
-      .decodeFromVideoElement(video.current, (result) => {
-        if (result && !stop) void scanned(result.getText());
-      })
-      .then((controls) => {
-        if (stop) controls.stop();
-        else scanner.current = controls;
-      })
-      .catch((e) => onError(e.message));
+    const element = video.current;
+    if (!camera || stage !== "ready" || !session || !element) return;
+    let stopped = false;
+    let generation = 0;
+    let controls: IScannerControls | undefined;
+    // Сканер привязан к размеру кадра на момент запуска, поэтому перезапускаем
+    // его и при смене потока (камеры), и при повороте телефона (событие resize).
+    const start = () => {
+      const current = ++generation;
+      controls?.stop();
+      controls = undefined;
+      if (!element.videoWidth) return;
+      new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 200 })
+        .decodeFromVideoElement(element, (result) => {
+          if (result && !stopped && current === generation)
+            void scanned(result.getText());
+        })
+        .then((next) => {
+          if (stopped || current !== generation) next.stop();
+          else controls = next;
+        })
+        .catch((e) => {
+          if (!stopped && current === generation)
+            onError(e?.message || "Не удалось запустить сканер QR");
+        });
+    };
+    start();
+    element.addEventListener("resize", start);
     return () => {
-      stop = true;
-      scanner.current?.stop();
+      stopped = true;
+      element.removeEventListener("resize", start);
+      controls?.stop();
     };
   }, [camera, stage, session]);
   return (
@@ -202,7 +235,7 @@ export function Gate({
           <select
             value={checkpoint}
             onChange={(e) => setCheckpoint(e.target.value)}
-            disabled={stage === "capture" || stage === "verify"}
+            disabled={busy}
           >
             {checkpoints.map((c) => (
               <option key={c.id} value={c.id}>
@@ -238,19 +271,21 @@ export function Gate({
         <div className="form-row">
           <select
             value={deviceId}
-            onChange={(e) => setDeviceId(e.target.value)}
+            onChange={(e) => {
+              setDeviceId(e.target.value);
+              if (camera) void openCamera(e.target.value);
+            }}
+            disabled={busy}
           >
-            <option value="">Камера по умолчанию</option>
-            {devices.map((d) => (
+            <option value="">Фронтальная камера</option>
+            <option value="environment">Основная камера</option>
+            {devices.map((d, i) => (
               <option key={d.deviceId} value={d.deviceId}>
-                {d.label}
+                {d.label || `Камера ${i + 1}`}
               </option>
             ))}
           </select>
-          <button
-            onClick={openCamera}
-            disabled={stage === "capture" || stage === "verify"}
-          >
+          <button onClick={() => void openCamera()} disabled={busy}>
             {camera ? "Сменить камеру" : "Включить камеру"}
           </button>
         </div>
@@ -267,7 +302,8 @@ export function Gate({
           </button>
         )}
         <p className="muted small">
-          Телефон сотрудника должен показывать QR. После сканирования проверка
+          Телефон сотрудника должен показывать QR. После сканирования сотрудник
+          смотрит прямо в камеру, поворачивать голову не нужно; проверка
           занимает до 30 секунд.
         </p>
       </section>

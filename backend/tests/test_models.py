@@ -20,5 +20,5 @@ def test_actual_onnx_models_load_and_empty_frames_fail_closed():
     assert engine.pad.get_inputs()[0].shape == [1, 3, 80, 80]
     image = np.zeros((480, 640, 3), np.uint8)
     assert engine.yolo_boxes(image) == []
-    with pytest.raises(VisionError, match="одно лицо"):
+    with pytest.raises(VisionError, match="не найдено"):
         engine.detect(image)

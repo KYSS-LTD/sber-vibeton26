@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import json
 import logging
 import math
+import time
 from typing import Annotated
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -707,6 +708,23 @@ def confirm(attempt_id: UUID, data: ConfirmationInput, actor: Auth):
         return passages.confirm_device(conn, actor, attempt_id, data.signature)
 
 
+def wait_for_confirmation(actor, attempt_id, deadline):
+    # The phone learns about an attempt from a 2 s poll, so with a short capture
+    # its signature can still be in flight when the face check has finished.
+    give_up = time.monotonic() + min(
+        10.0, (deadline - passages.utcnow()).total_seconds() - 1
+    )
+    with transaction(actor) as conn:
+        while not one(
+            conn,
+            "SELECT 1 FROM device_confirmations WHERE attempt_id=%s",
+            (attempt_id,),
+        ):
+            if time.monotonic() >= give_up:
+                return
+            time.sleep(0.3)
+
+
 @app.post("/api/v1/passages/{attempt_id}/verify")
 async def verify(attempt_id: UUID, actor: Auth, frames: list[UploadFile] = File(...)):
     if not 8 <= len(frames) <= 32:
@@ -737,17 +755,20 @@ async def verify(attempt_id: UUID, actor: Auth, frames: list[UploadFile] = File(
         raise HTTPException(413, "Слишком большой объём кадров")
     try:
         result = await asyncio.to_thread(
-            vision.engine().verify, contents, templates, attempt["actions"]
+            vision.engine().verify, contents, templates
         )
     except vision.VisionError as e:
         result = {"passed": False, "reason": str(e)}
     except Exception as e:
         log.error("Vision failed: %s", type(e).__name__)
         result = {"passed": False, "reason": "Сервис биометрии недоступен"}
+    await asyncio.to_thread(
+        wait_for_confirmation, actor, attempt_id, attempt["deadline"]
+    )
     with transaction(actor) as conn:
         media_id = storage.put_media(
             conn,
-            contents[0],
+            contents[result.get("frame", 0)],
             "image/jpeg",
             "evidence",
             site_id=attempt["site_id"],
@@ -925,7 +946,7 @@ def site_map(site_id: UUID, actor: Auth):
 @app.post("/api/v1/sites/{site_id}/map")
 def save_map(site_id: UUID, data: MapInput, actor: Auth):
     with transaction(actor) as conn:
-        site = authorize_site(conn, actor, site_id, "manager")
+        authorize_site(conn, actor, site_id, "manager")
         conn.execute("SELECT id FROM sites WHERE id=%s FOR UPDATE", (site_id,))
         transform = data.transform
         if (

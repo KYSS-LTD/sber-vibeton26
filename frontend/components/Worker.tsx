@@ -204,7 +204,7 @@ export function Worker({
           </small>
         )}
         <p className="small">
-          Покажите этот экран на КПП и выполните повороты головы перед камерой.
+          Покажите этот экран на КПП и смотрите прямо в камеру.
         </p>
         <button onClick={loadQR} disabled={!ready}>
           Обновить пропуск

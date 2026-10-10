@@ -10,6 +10,7 @@ OIDC_INTERNAL = os.getenv(
     "OIDC_INTERNAL_URL", "http://keycloak:8080/auth/realms/prohod"
 )
 FACE_THRESHOLD = float(os.getenv("FACE_THRESHOLD", "0.45"))
+PAD_THRESHOLD = float(os.getenv("PAD_THRESHOLD", "0.8"))
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://s3:8333")
 
 
