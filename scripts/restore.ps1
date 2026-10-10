@@ -24,6 +24,8 @@ try {
         if ($LASTEXITCODE -eq 0) { break }
         Start-Sleep -Seconds 2
     }
+    # Only fresh volumes are allowed above; remove schemas installed by the PostGIS image.
+    DockerStep @('compose','-p',$Project,'exec','-T','postgres','sh','-c','PGPASSWORD=$(cat /bootstrap/db_owner) psql -X -U prohod_owner -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE prohod" -c "CREATE DATABASE prohod OWNER prohod_owner TEMPLATE template0" -c "DROP DATABASE keycloak" -c "CREATE DATABASE keycloak OWNER keycloak TEMPLATE template0"')
     DockerStep @('compose','-p',$Project,'cp',(Join-Path $sourcePath 'prohod.dump'),'postgres:/tmp/prohod.dump')
     DockerStep @('compose','-p',$Project,'cp',(Join-Path $sourcePath 'keycloak.dump'),'postgres:/tmp/keycloak.dump')
     DockerStep @('compose','-p',$Project,'exec','-T','postgres','sh','-c','PGPASSWORD=$(cat /bootstrap/db_owner) pg_restore --exit-on-error -U prohod_owner -d prohod /tmp/prohod.dump')

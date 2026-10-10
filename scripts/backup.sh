@@ -26,4 +26,5 @@ for kind in objects bootstrap_secrets runtime_secrets certificates; do
 done
 printf '{"format":1,"project":"%s","created_at":"%s"}\n' "$project" "$(date -u +%FT%TZ)" > "$destination/manifest.json"
 (cd "$destination" && sha256sum *.dump *.tar.gz manifest.json > checksums.sha256)
+chmod 600 "$destination"/*
 echo "Backup saved: $destination (contains credentials and biometric data)"

@@ -28,6 +28,9 @@ for ((attempt=0; attempt<60; attempt++)); do
   sleep 2
 done
 [[ "$ready" == 1 ]] || { echo 'PostgreSQL did not become ready' >&2; exit 1; }
+# The PostGIS image precreates tiger/topology in its initial database. Restore
+# into empty template0 databases in this NEW project to avoid schema collisions.
+"${compose[@]}" exec -T postgres sh -c 'PGPASSWORD=$(cat /bootstrap/db_owner) psql -X -U prohod_owner -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE prohod" -c "CREATE DATABASE prohod OWNER prohod_owner TEMPLATE template0" -c "DROP DATABASE keycloak" -c "CREATE DATABASE keycloak OWNER keycloak TEMPLATE template0"'
 for database in prohod keycloak; do
   "${compose[@]}" cp "$source_path/$database.dump" "postgres:/tmp/$database.dump"
   "${compose[@]}" exec -T postgres sh -c "PGPASSWORD=\$(cat /bootstrap/db_owner) pg_restore --exit-on-error -U prohod_owner -d $database /tmp/$database.dump"

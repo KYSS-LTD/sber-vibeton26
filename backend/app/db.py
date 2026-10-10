@@ -26,6 +26,8 @@ def transaction(actor: Actor, analytics=False, owner=False):
         dsn("owner" if owner else "analytics" if analytics else "app"),
         row_factory=dict_row,
     ) as conn:
+        if analytics:
+            conn.execute("SET TRANSACTION READ ONLY")
         if not owner:
             conn.execute(
                 "SELECT set_config('app.actor',%s,true),set_config('app.roles',%s,true)",
