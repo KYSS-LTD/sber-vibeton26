@@ -24,3 +24,26 @@ test("login screen uses local schematic without external images", async ({
   await expect(page.locator(".landing-visual")).toBeVisible();
   expect(await page.locator('img[src^="http"]').count()).toBe(0);
 });
+test("PWA manifest, icons, service worker and offline page are served", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute(
+    "href",
+    "/manifest.json",
+  );
+  const manifest = await (await request.get("/manifest.json")).json();
+  expect(manifest.display).toBe("standalone");
+  expect(manifest.start_url).toBe("/");
+  expect(manifest.icons.map((i: any) => i.sizes)).toEqual(
+    expect.arrayContaining(["192x192", "512x512"]),
+  );
+  expect(manifest.icons.some((i: any) => i.purpose === "maskable")).toBe(true);
+  for (const icon of manifest.icons)
+    expect((await request.get(icon.src)).ok(), icon.src).toBeTruthy();
+  const worker = await request.get("/sw.js");
+  expect(worker.headers()["content-type"]).toContain("javascript");
+  expect(worker.headers()["cache-control"]).toContain("no-cache");
+  expect((await request.get("/offline.html")).ok()).toBeTruthy();
+});

@@ -5,6 +5,7 @@ import { MapPin, Clock, Smartphone, Bell } from "lucide-react";
 import { api, snapshots } from "../lib/api";
 import { deviceKey, signChallenge } from "../lib/device";
 import { enablePush } from "../lib/push";
+import { InstallApp } from "./InstallApp";
 import { notificationText } from "../lib/notifications";
 
 export function Worker({
@@ -212,6 +213,7 @@ export function Worker({
         </button>
       </section>
       <div className="stack">
+        <InstallApp />
         <section className="panel">
           <span className="eyebrow">МОЯ СМЕНА</span>
           <div className="shift-state">

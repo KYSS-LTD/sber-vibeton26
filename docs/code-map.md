@@ -31,8 +31,9 @@ SQL-схема и правила RLS — `backend/sql/001_schema.sql`. Пром�
 | `components/Worker.tsx` | Телефон сотрудника: QR, подпись попытки, GPS, смены | |
 | `components/Admin.tsx` | Сотрудники, эталоны, назначения, объекты, провайдер модели | |
 | `components/Manager.tsx` | Обзор, heatmap, помощник, расписания, отчёт CSV | |
-| `components/MapEditor.tsx`, `SiteMap.tsx` | Схема объекта и зоны | |
+| `components/MapEditor.tsx`, `BoundaryEditor.tsx`, `GeoMap.tsx` | Зоны и граница объекта на Leaflet/OpenStreetMap; общий компонент карты | |
 | `lib/api.ts`, `lib/device.ts` | Клиент API; ключ устройства и подпись | |
+| `public/sw.js`, `public/manifest.json`, `lib/pwa.ts`, `components/InstallApp.tsx` | PWA: офлайн-страница, установка на телефон, push | |
 
 ## Типичные изменения на защите
 

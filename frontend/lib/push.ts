@@ -1,9 +1,10 @@
 import { api } from "./api";
+import { registerWorker } from "./pwa";
 
 export async function enablePush() {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") throw new Error("Уведомления не разрешены");
-  const worker = await navigator.serviceWorker.register("/sw.js");
+  const worker = await registerWorker();
   await navigator.serviceWorker.ready;
   const value = await api("/push/key");
   const raw = Uint8Array.from(
