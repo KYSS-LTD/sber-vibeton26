@@ -4,7 +4,7 @@
 
 ## Запуск
 
-Требуются Docker Desktop с работающим WSL2 и Linux containers, 12 ГБ доступной памяти, около 10 ГБ места и интернет для первой загрузки моделей. На Windows первоначальная установка WSL/Docker может потребовать администратора и перезагрузки.
+Требуются Docker Engine с Compose на Linux либо Docker Desktop с WSL2 на Windows, 12 ГБ доступной памяти, около 15 ГБ места и интернет для первой загрузки моделей. На Windows первоначальная установка WSL/Docker может потребовать администратора и перезагрузки.
 
 ```powershell
 Copy-Item .env.example .env
@@ -13,6 +13,10 @@ docker compose logs -f model-init llm-init backend
 ```
 
 Открыть https://localhost. Первое создание моделей ONNX и загрузка Qwen занимают несколько минут. Сервисы и секреты сохраняются в именованных томах; повторный запуск не меняет пароли и не скачивает проверенные модели заново.
+
+Для NVIDIA GPU с установленным NVIDIA Container Toolkit скопировать `compose.gpu.yaml` в `compose.override.yaml`. После этого обычная команда `docker compose up --build -d` автоматически подключает GPU для Ollama и YOLO/MiniFASNet. Отдельный CUDA runtime закреплён в `backend/requirements-gpu.lock`; SFace и YuNet работают на CPU. Если выбран CUDA и provider не загрузился, биометрия возвращает ошибку. Без override обычный Compose работает на CPU.
+
+Запуск на сервере Linux, SSH и резервное копирование — [docs/deployment.md](docs/deployment.md).
 
 Для телефона задать в `.env` `APP_HOST` равным LAN-IP компьютера и `PUBLIC_ORIGIN=https://<LAN-IP>`. Сделать это **до первого запуска**: адрес является issuer Keycloak. Телефон должен находиться в той же сети. Открыть порт 443 в Windows Firewall при необходимости.
 

@@ -4,6 +4,7 @@
 .test-runtime/
 frontend/tsconfig.tsbuildinfo
 .env
+compose.override.yaml
 __pycache__/
 .pytest_cache/
 node_modules/

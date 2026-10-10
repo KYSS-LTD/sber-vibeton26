@@ -10,6 +10,8 @@
 
 ## Резервная копия
 
+На Linux использовать `sudo bash scripts/backup.sh backups/<новое-имя>` и `sudo bash scripts/restore.sh backups/<имя> <новый-project>`; подробности в [deployment.md](deployment.md). На Windows доступны `scripts/backup.ps1` и `scripts/restore.ps1`.
+
 Копировать БД и S3/секреты согласованно, остановив запись:
 
 ```powershell

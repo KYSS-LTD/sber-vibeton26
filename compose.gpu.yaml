@@ -1,0 +1,25 @@
+# Copy to compose.override.yaml once to enable GPU with ordinary compose up.
+services:
+  backend:
+    build:
+      context: ./backend
+      args: {VISION_CUDA: '1'}
+    environment: {VISION_DEVICE: cuda}
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]
+  tests:
+    build:
+      context: ./backend
+      args: {VISION_CUDA: '1'}
+    environment: {VISION_DEVICE: cuda}
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]

@@ -1,8 +1,9 @@
-"""CPU inference: YOLO detector, YuNet landmarks, SFace identity, MiniFASNet PAD."""
+"""YOLO/MiniFASNet on CUDA or CPU; YuNet landmarks and SFace identity on CPU."""
 
 import concurrent.futures
 import threading
 import time
+import os
 import cv2
 import numpy as np
 import onnxruntime as ort
@@ -29,16 +30,22 @@ class Engine:
     def __init__(self):
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = 2
+        cuda = os.getenv("VISION_DEVICE", "cpu") == "cuda"
+        if cuda:
+            ort.preload_dlls(directory="")
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if cuda else ["CPUExecutionProvider"]
         self.yolo = ort.InferenceSession(
             str(MODEL_DIR / "yolov8n-face.onnx"),
             sess_options=opts,
-            providers=["CPUExecutionProvider"],
+            providers=providers,
         )
         self.pad = ort.InferenceSession(
             str(MODEL_DIR / "minifas.onnx"),
             sess_options=opts,
-            providers=["CPUExecutionProvider"],
+            providers=providers,
         )
+        if cuda and any("CUDAExecutionProvider" not in session.get_providers() for session in (self.yolo, self.pad)):
+            raise RuntimeError("CUDA requested but the inference provider could not load")
         self.yunet = cv2.FaceDetectorYN.create(
             str(MODEL_DIR / "yunet.onnx"), "", (320, 320), 0.8, 0.3, 5000
         )
