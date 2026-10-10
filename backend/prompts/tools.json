@@ -1,0 +1,5 @@
+{
+  "tools": ["onsite_now", "shift_statistics", "zone_statistics", "passage_denials", "period_summary"],
+  "selection_schema": {"type":"object","required":["tools"],"properties":{"tools":{"type":"array","minItems":1,"maxItems":5,"items":{"type":"string","enum":["onsite_now","shift_statistics","zone_statistics","passage_denials","period_summary"]}}},"additionalProperties":false},
+  "answer_schema": {"type":"object","required":["blocks"],"properties":{"blocks":{"type":"array","maxItems":6,"items":{"type":"object","required":["fact_id"],"properties":{"fact_id":{"type":"string"}},"additionalProperties":false}}},"additionalProperties":false}
+}

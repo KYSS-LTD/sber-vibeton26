@@ -1,0 +1,200 @@
+name: prohod
+x-backend: &backend
+  build: ./backend
+  environment: &backend-env
+    PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://localhost}
+    DB_HOST: postgres
+    SECRETS_DIR: /runtime
+    MODELS_DIR: /models
+    OIDC_INTERNAL_URL: http://keycloak:8080/auth/realms/prohod
+    S3_ENDPOINT: http://s3:8333
+    OLLAMA_URL: http://ollama:11434
+    GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-}
+    GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
+    GIGACHAT_CA_FILE: ${GIGACHAT_CA_FILE:-}
+  volumes:
+    - runtime_secrets:/runtime:ro
+    - models:/models:ro
+    - ./infra/ca:/certificates:ro
+  restart: unless-stopped
+services:
+  secrets:
+    build: ./backend
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://localhost}
+      DB_SECRETS_DIR: /database-secrets
+      AUTH_SECRETS_DIR: /auth-secrets
+      S3_ADMIN_SECRETS_DIR: /storage-secrets
+      MIGRATION_SECRETS_DIR: /migration-secrets
+    command: python -m app.bootstrap secrets
+    volumes:
+      - bootstrap_secrets:/bootstrap
+      - runtime_secrets:/runtime
+      - database_secrets:/database-secrets
+      - auth_secrets:/auth-secrets
+      - storage_secrets:/storage-secrets
+      - migration_secrets:/migration-secrets
+    restart: 'no'
+  postgres:
+    image: postgis/postgis:17-3.5@sha256:01a6a70e41e6c4467c8f55f6063555ed72db2d6662cd0d571040d42eadaeb6f6
+    environment:
+      POSTGRES_USER: prohod_owner
+      POSTGRES_DB: prohod
+      POSTGRES_PASSWORD_FILE: /bootstrap/db_owner
+    volumes:
+      - database:/var/lib/postgresql/data
+      - database_secrets:/bootstrap:ro
+      - ./infra/postgres-init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    depends_on:
+      secrets: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U prohod_owner -d prohod']
+      interval: 5s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+  migrate:
+    <<: *backend
+    command: python -m app.bootstrap migrate
+    volumes:
+      - migration_secrets:/bootstrap:ro
+      - runtime_secrets:/runtime:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: 'no'
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4.7@sha256:9409c59bdfb65dbffa20b11e6f18b8abb9281d480c7ca402f51ed3d5977e6007
+    entrypoint: [/bin/bash, /setup/keycloak.sh]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_HOSTNAME: ${PUBLIC_ORIGIN:-https://localhost}/auth
+      KC_HTTP_ENABLED: 'true'
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: 'true'
+      KC_BOOTSTRAP_ADMIN_USERNAME: kcadmin
+    volumes:
+      - auth_secrets:/bootstrap:ro
+      - ./infra/keycloak.sh:/setup/keycloak.sh:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+  s3:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    entrypoint: [/bin/sh, /setup/s3.sh]
+    volumes:
+      - objects:/data
+      - storage_secrets:/bootstrap:ro
+      - ./infra/s3.sh:/setup/s3.sh:ro
+    depends_on:
+      secrets: {condition: service_completed_successfully}
+    restart: unless-stopped
+  provisioner:
+    <<: *backend
+    command: python -m app.bootstrap provision
+    volumes:
+      - bootstrap_secrets:/bootstrap:ro
+      - runtime_secrets:/runtime:ro
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      s3: {condition: service_started}
+    restart: on-failure
+  model-init:
+    <<: *backend
+    command: python -m app.download_models
+    volumes: [models:/models]
+    restart: 'no'
+  ollama:
+    image: ollama/ollama:0.12.3@sha256:c622a7adec67cf5bd7fe1802b7e26aa583a955a54e91d132889301f50c3e0bd0
+    volumes: [ollama:/root/.ollama]
+    restart: unless-stopped
+  llm-init:
+    <<: *backend
+    command: python -m app.bootstrap ollama
+    depends_on:
+      ollama: {condition: service_started}
+    restart: 'no'
+  backend:
+    <<: *backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
+    depends_on:
+      provisioner: {condition: service_completed_successfully}
+      model-init: {condition: service_completed_successfully}
+      keycloak: {condition: service_started}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  worker:
+    <<: *backend
+    command: python -m app.worker
+    depends_on:
+      backend: {condition: service_healthy}
+  storage-worker:
+    <<: *backend
+    command: python -m app.bootstrap storage-worker
+    volumes:
+      - bootstrap_secrets:/bootstrap:ro
+      - runtime_secrets:/runtime:ro
+    depends_on:
+      backend: {condition: service_healthy}
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+  proxy:
+    image: caddy:2.10.2@sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba5da182adb
+    environment:
+      APP_HOST: ${APP_HOST:-localhost}
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+    depends_on:
+      backend: {condition: service_healthy}
+      frontend: {condition: service_started}
+    restart: unless-stopped
+  tests:
+    <<: *backend
+    profiles: [test]
+    command: pytest -q
+    environment:
+      <<: *backend-env
+      TEST_DATABASE: '1'
+      TEST_STORAGE: '1'
+      TEST_MODELS: '1'
+    volumes:
+      - runtime_secrets:/runtime:ro
+      - models:/models:ro
+      - bootstrap_secrets:/bootstrap:ro
+    depends_on:
+      backend: {condition: service_healthy}
+  browser-tests:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.playwright
+    profiles: [test]
+    network_mode: service:proxy
+    environment:
+      E2E_BASE_URL: ${PUBLIC_ORIGIN:-https://localhost}
+      E2E_ACCOUNTS_FILE: /bootstrap/accounts.json
+    extra_hosts:
+      - '${APP_HOST:-localhost}:127.0.0.1'
+    volumes:
+      - bootstrap_secrets:/bootstrap:ro
+    depends_on:
+      proxy: {condition: service_started}
+volumes:
+  bootstrap_secrets:
+  database_secrets:
+  auth_secrets:
+  storage_secrets:
+  migration_secrets:
+  runtime_secrets:
+  database:
+  objects:
+  models:
+  ollama:
+  certificates:

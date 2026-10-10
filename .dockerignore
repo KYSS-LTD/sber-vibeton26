@@ -1,0 +1,12 @@
+.git
+.idea
+.venv
+.test-venv
+.test-runtime
+**/node_modules
+**/.next
+**/__pycache__
+**/.pytest_cache
+models
+backups
+local-secrets
