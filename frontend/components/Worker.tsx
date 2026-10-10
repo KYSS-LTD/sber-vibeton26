@@ -5,6 +5,7 @@ import { MapPin, Clock, Smartphone, Bell } from "lucide-react";
 import { api, snapshots } from "../lib/api";
 import { deviceKey, signChallenge } from "../lib/device";
 import { enablePush } from "../lib/push";
+import { notificationText } from "../lib/notifications";
 
 export function Worker({
   me,
@@ -259,16 +260,7 @@ export function Worker({
           <h2>Уведомления</h2>
           {notifications.slice(0, 5).map((n) => (
             <div className="list-row" key={n.id}>
-              <span>
-                {n.payload.detail ||
-                  (
-                    {
-                      shift_opened: "Смена открыта",
-                      shift_closed: "Смена закрыта",
-                    } as any
-                  )[n.kind] ||
-                  n.kind}
-              </span>
+              <span>{notificationText(n)}</span>
               <small>{new Date(n.created_at).toLocaleTimeString("ru")}</small>
             </div>
           ))}

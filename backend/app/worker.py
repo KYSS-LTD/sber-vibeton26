@@ -7,6 +7,13 @@ from .db import transaction, SYSTEM, many, one
 from .geo import notify_alert
 from .passages import expire
 
+NOTIFICATION_TEXT = {
+    "shift_opened": "Вы вошли на объект — смена открыта",
+    "shift_closed": "Вы вышли с объекта — смена закрыта",
+    "schedule": "Скоро начнётся запланированная смена",
+    "alert": "Новое предупреждение по объекту",
+}
+
 
 def tick():
     with transaction(SYSTEM) as conn:
@@ -96,8 +103,9 @@ def tick():
                         data=json.dumps(
                             {
                                 "title": "Проход",
-                                "body": notification["payload"].get(
-                                    "detail", notification["kind"]
+                                "body": notification["payload"].get("detail")
+                                or NOTIFICATION_TEXT.get(
+                                    notification["kind"], "Новое уведомление"
                                 ),
                             },
                             ensure_ascii=False,

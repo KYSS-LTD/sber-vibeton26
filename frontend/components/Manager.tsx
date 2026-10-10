@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { api, mediaBlob, snapshots } from "../lib/api";
 import { enablePush } from "../lib/push";
+import { notificationText } from "../lib/notifications";
 import { SiteMap } from "./SiteMap";
 import { MapEditor } from "./MapEditor";
 import { Photo } from "./Photo";
@@ -433,7 +434,7 @@ export function Manager({
             <summary>Мои последние уведомления</summary>
             {notifications.slice(0, 5).map((n) => (
               <p key={n.id}>
-                {n.payload.detail || n.kind} ·{" "}
+                {notificationText(n)} ·{" "}
                 {new Date(n.created_at).toLocaleString("ru")}
               </p>
             ))}
