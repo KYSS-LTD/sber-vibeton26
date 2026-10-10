@@ -3,3 +3,5 @@
 Dockerfile* text eol=lf
 *.py text eol=lf
 *.sql text eol=lf
+Caddyfile* text eol=lf
+*.service text eol=lf
