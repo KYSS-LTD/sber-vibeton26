@@ -12,6 +12,7 @@ from app.db import transaction, SYSTEM, Actor, one
 from app import passages, geo
 from app.main import app, GeoInput
 from app.auth import authenticate
+from app.config import dsn
 
 pytestmark = [
     pytest.mark.integration,
@@ -42,6 +43,7 @@ def fixture_db(monkeypatch):
                 "qr",
             ]
         }
+        ids["qr_token"] = "test-qr-token-" + uuid4().hex
         for name, role in [
             ("guard", "controller"),
             ("worker", "employee"),
@@ -119,8 +121,8 @@ def fixture_db(monkeypatch):
                 ids["qr"],
                 ids["employee"],
                 ids["a"],
-                digest("test-qr-token"),
-                encrypt("test-qr-token"),
+                digest(ids["qr_token"]),
+                encrypt(ids["qr_token"]),
             ),
         )
         conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
@@ -179,7 +181,7 @@ def test_reusable_daily_qr_and_atomic_one_open_shift(fixture_db):
     conn, ids, actors, context = fixture_db
     context(actors["guard"])
     entry = passages.start_attempt(
-        conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+        conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
     )
     conn.execute(
         "INSERT INTO device_confirmations(attempt_id,employee_id,device_key_id,signature) VALUES(%s,%s,%s,%s)",
@@ -199,10 +201,10 @@ def test_reusable_daily_qr_and_atomic_one_open_shift(fixture_db):
     )
     with pytest.raises(HTTPException):
         passages.start_attempt(
-            conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+            conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
         )
     exit_attempt = passages.start_attempt(
-        conn, actors["guard"], ids["session"], "test-qr-token", "exit"
+        conn, actors["guard"], ids["session"], ids["qr_token"], "exit"
     )
     assert exit_attempt["id"] != entry["id"]
     conn.execute(
@@ -239,7 +241,7 @@ def test_guard_reassignment_invalidates_pending_attempt(fixture_db):
     conn, ids, actors, context = fixture_db
     context(actors["guard"])
     entry = passages.start_attempt(
-        conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+        conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
     )
     app.dependency_overrides[authenticate] = lambda: actors["admin"]
     response = TestClient(app).post(
@@ -296,7 +298,7 @@ def test_geolocation_only_during_shift_and_no_auto_close(fixture_db):
         geo.record_location(conn, actors["worker"], sample)
     context(actors["guard"])
     entry = passages.start_attempt(
-        conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+        conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
     )
     conn.execute(
         "INSERT INTO device_confirmations(attempt_id,employee_id,device_key_id,signature) VALUES(%s,%s,%s,%s)",
@@ -342,6 +344,20 @@ def test_analytics_role_is_read_only():
         conn.rollback()
 
 
+@pytest.mark.parametrize("role", ["app", "analytics"])
+def test_runtime_roles_cannot_bypass_rls_or_own_tables(role):
+    with psycopg.connect(dsn(role)) as conn:
+        flags = conn.execute(
+            "SELECT rolsuper,rolbypassrls,pg_has_role(current_user,'prohod_owner','MEMBER') FROM pg_roles WHERE rolname=current_user"
+        ).fetchone()
+        assert flags == (False, False, False)
+        assert not conn.execute(
+            "SELECT EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relowner=(SELECT oid FROM pg_roles WHERE rolname=current_user))"
+        ).fetchone()[0]
+        if role == "analytics":
+            assert conn.execute("SHOW default_transaction_read_only").fetchone()[0] == "on"
+
+
 def test_guard_manager_role_cannot_expand_checkpoint_authority(fixture_db):
     conn, ids, actors, context = fixture_db
     context(actors["admin"])
@@ -365,11 +381,11 @@ def test_expired_revoked_qr_and_parallel_attempts(fixture_db):
     conn, ids, actors, context = fixture_db
     context(actors["guard"])
     entry = passages.start_attempt(
-        conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+        conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
     )
     with pytest.raises(HTTPException) as exc:
         passages.start_attempt(
-            conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+            conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
         )
     assert exc.value.status_code == 409
     conn.execute(
@@ -391,7 +407,7 @@ def test_expired_revoked_qr_and_parallel_attempts(fixture_db):
     )
     with pytest.raises(HTTPException):
         passages.start_attempt(
-            conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+            conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
         )
 
 
@@ -417,7 +433,7 @@ def test_heatmap_clips_observations_and_reports_missing_minutes(fixture_db):
     conn, ids, actors, context = fixture_db
     context(actors["guard"])
     entry = passages.start_attempt(
-        conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+        conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
     )
     conn.execute(
         "INSERT INTO device_confirmations(attempt_id,employee_id,device_key_id,signature) VALUES(%s,%s,%s,%s)",

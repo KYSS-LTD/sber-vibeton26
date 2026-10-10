@@ -62,7 +62,7 @@ def test_coordinate_request_waiting_on_exit_cannot_append_after_closure(monkeypa
             try:
                 context(actors["guard"])
                 attempt = passages.start_attempt(
-                    conn, actors["guard"], ids["session"], "test-qr-token", "entry"
+                    conn, actors["guard"], ids["session"], ids["qr_token"], "entry"
                 )
                 conn.execute(
                     "INSERT INTO device_confirmations(attempt_id,employee_id,device_key_id,signature) VALUES(%s,%s,%s,%s)",

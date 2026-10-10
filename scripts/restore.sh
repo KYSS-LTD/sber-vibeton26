@@ -15,7 +15,7 @@ done
 (cd "$source_path" && sha256sum -c checksums.sha256)
 image='python:3.12.14-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e'
 for kind in objects bootstrap_secrets runtime_secrets certificates; do
-  docker volume create "${project}_${kind}" >/dev/null
+  docker volume create --label "com.docker.compose.project=$project" --label "com.docker.compose.volume=$kind" "${project}_${kind}" >/dev/null
   docker run --rm --mount "type=volume,source=${project}_${kind},target=/target" \
     --mount "type=bind,source=$source_path,target=/backup,readonly" "$image" \
     tar xzf "/backup/$kind.tar.gz" -C /target
