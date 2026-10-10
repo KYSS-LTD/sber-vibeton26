@@ -14,6 +14,8 @@ playwright-report/
 models/
 *.log
 *.pem
+# Публичные корневые сертификаты для TLS GigaChat; закрытых ключей здесь нет.
+!infra/ca/russian_trusted_ca_bundle.pem
 *.key
 backups/
 local-secrets/

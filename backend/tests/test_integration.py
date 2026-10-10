@@ -275,9 +275,8 @@ def test_three_templates_constraint(fixture_db):
                 "UPDATE face_reference_sets SET state='retired' WHERE id=%s",
                 (ids["reference"],),
             )
-            row = one(
-                conn,
-                "INSERT INTO face_reference_sets(employee_id,version,state,model_version) VALUES(%s,2,'active','test') RETURNING id",
+            conn.execute(
+                "INSERT INTO face_reference_sets(employee_id,version,state,model_version) VALUES(%s,2,'active','test')",
                 (ids["employee"],),
             )
             conn.execute("SET CONSTRAINTS ALL IMMEDIATE")

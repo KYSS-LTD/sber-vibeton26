@@ -1,5 +1,9 @@
 """Acceptance helper; use ONLY on an isolated restored Compose project."""
-import hashlib, json, pathlib, sys, os
+import hashlib
+import json
+import os
+import pathlib
+import sys
 from uuid import uuid4
 sys.path.insert(0,'/app/tests')
 sys.path.insert(0,'/app')
@@ -22,7 +26,9 @@ if sys.argv[1]=='seed':
     fixture.close()
     with transaction(SYSTEM) as conn:
         scope=one(conn,"SELECT bucket FROM storage_scopes WHERE purpose='evidence_write' ORDER BY bucket LIMIT 1")
-        bucket=scope['bucket']; key='evidence/tests/persistence-'+str(uuid4()); body=b'acceptance-persistence-object'
+        bucket=scope['bucket']
+        key='evidence/tests/persistence-'+str(uuid4())
+        body=b'acceptance-persistence-object'
         scoped_client(conn,bucket,'evidence_write').put_object(Bucket=bucket,Key=key,Body=body)
         row=one(conn,'SELECT id,opened_at,closed_at FROM shifts WHERE id=%s',(shift,))
         settings=many(conn,'SELECT * FROM model_settings ORDER BY id')
