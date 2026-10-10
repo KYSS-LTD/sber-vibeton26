@@ -1,7 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, mediaBlob } from "../lib/api";
-import { SiteMap, boundsFor } from "./SiteMap";
+import {
+  type LngLat,
+  boundsOf,
+  openRing,
+  selfIntersects,
+} from "../lib/geometry";
+import { GeoMap } from "./GeoMap";
 
 export function MapEditor({
   site,
@@ -12,9 +18,9 @@ export function MapEditor({
   onError: (s: string) => void;
   onSaved: () => void;
 }) {
-  const [bounds, setBounds] = useState(boundsFor(site.boundary));
+  const [bounds, setBounds] = useState(boundsOf(site.boundary.coordinates[0]));
   const [zones, setZones] = useState<any[]>([]);
-  const [draft, setDraft] = useState<number[][]>([]);
+  const [draft, setDraft] = useState<LngLat[]>([]);
   const [name, setName] = useState("");
   const [mediaId, setMediaId] = useState<string | null>(null);
   const [background, setBackground] = useState("");
@@ -50,6 +56,14 @@ export function MapEditor({
       onError("Укажите название и минимум три точки зоны");
       return;
     }
+    if (selfIntersects(draft)) {
+      onError("Контур зоны не должен пересекать сам себя");
+      return;
+    }
+    if (zones.some((z) => z.name === name.trim())) {
+      onError("Зона с таким названием уже есть");
+      return;
+    }
     setZones([
       ...zones,
       {
@@ -59,19 +73,6 @@ export function MapEditor({
     ]);
     setDraft([]);
     setName("");
-  }
-  async function upload(file: File) {
-    const form = new FormData();
-    form.append("file", file);
-    try {
-      const result = await api(`/sites/${site.id}/plan`, {
-        method: "POST",
-        body: form,
-      });
-      setMediaId(result.media_id);
-    } catch (e: any) {
-      onError(e.message);
-    }
   }
   async function save() {
     setSaving(true);
@@ -99,50 +100,22 @@ export function MapEditor({
         </button>
       </div>
       <p className="muted small">
-        Загрузите схему, задайте координаты её углов. Точками на схеме нарисуйте
-        зоны внутри границы объекта.
+        Кликайте по карте, чтобы поставить вершины зоны внутри границы объекта;
+        вершины можно перетаскивать. Рядом с существующими вершинами точка
+        притягивается к ним — так соседние зоны совпадают по границе.
       </p>
-      <div className="form-row">
-        <label className="file-input">
-          Загрузить схему
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              if (e.target.files?.[0]) void upload(e.target.files[0]);
-            }}
-          />
-        </label>
-        {Object.entries(bounds).map(([key, value]) => (
-          <label key={key} className="compact-field">
-            {
-              (
-                {
-                  west: "Запад",
-                  east: "Восток",
-                  south: "Юг",
-                  north: "Север",
-                } as any
-              )[key]
-            }
-            <input
-              type="number"
-              step="0.000001"
-              value={value}
-              onChange={(e) =>
-                setBounds({ ...bounds, [key]: Number(e.target.value) })
-              }
-            />
-          </label>
-        ))}
-      </div>
-      <SiteMap
+      <GeoMap
         boundary={site.boundary}
         bounds={bounds}
         zones={zones}
         background={background}
         draft={draft}
+        fitKey={site.id}
+        snap
         onPoint={(point) => setDraft([...draft, point])}
+        onMovePoint={(index, point) =>
+          setDraft(draft.map((p, i) => (i === index ? point : p)))
+        }
       />
       <div className="form-row">
         <input
@@ -160,6 +133,16 @@ export function MapEditor({
         {zones.map((z, i) => (
           <span key={i} className="badge">
             {z.name}
+            <button
+              onClick={() => {
+                setDraft(openRing(z.polygon));
+                setName(z.name);
+                setZones(zones.filter((_, n) => n !== i));
+              }}
+              aria-label={"Изменить " + z.name}
+            >
+              ✎
+            </button>
             <button
               onClick={() => setZones(zones.filter((_, n) => n !== i))}
               aria-label={"Удалить " + z.name}

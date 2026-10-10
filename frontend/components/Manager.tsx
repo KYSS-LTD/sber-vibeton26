@@ -12,7 +12,7 @@ import {
 import { api, mediaBlob, snapshots } from "../lib/api";
 import { enablePush } from "../lib/push";
 import { notificationText } from "../lib/notifications";
-import { SiteMap } from "./SiteMap";
+import { GeoMap } from "./GeoMap";
 import { MapEditor } from "./MapEditor";
 import { Photo } from "./Photo";
 
@@ -305,11 +305,13 @@ export function Manager({
             </div>
             <span className="badge">GPS раз в 10 минут</span>
           </div>
-          <SiteMap
+          <GeoMap
             boundary={site.boundary}
             zones={tab === "heatmap" ? report?.heatmap.zones : map.zones}
             people={people}
             routes={routes}
+            heat={tab === "heatmap"}
+            fitKey={site.id}
             bounds={map.version?.transform}
             background={background}
           />

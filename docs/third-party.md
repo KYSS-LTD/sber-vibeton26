@@ -20,12 +20,14 @@
 | Компонент | Лицензия |
 |---|---|
 | FastAPI, Next.js, React | MIT |
+| Leaflet | BSD-2-Clause |
 | PostgreSQL | PostgreSQL License |
 | PostGIS | GPL-2.0-or-later |
 | Keycloak | Apache-2.0 |
 | SeaweedFS | Apache-2.0 |
 | Ollama | MIT |
 | Caddy | Apache-2.0 |
+| Карта OpenStreetMap (тайлы) | ODbL, атрибуция «© OpenStreetMap contributors» показана на карте |
 | ONNX Runtime, OpenCV | MIT, Apache-2.0 |
 
 Полные списки версий — `backend/requirements.lock`, `backend/requirements-models.lock`, `frontend/package-lock.json`; образы контейнеров закреплены по digest в `compose.yaml`.

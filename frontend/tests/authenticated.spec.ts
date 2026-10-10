@@ -32,14 +32,18 @@ test("admin logs in, sees reports and publishes polygon zones", async ({
     await page
       .getByRole("button", { name: "Удалить E2E зона", exact: true })
       .click();
-  const map = page.locator("svg.site-map");
+  // Leaflet + OpenStreetMap: рисуем квадрат внутри границы объекта.
+  const map = page.locator(".geo-host");
+  await expect(map).toBeVisible();
+  await expect(map.locator(".leaflet-tile-pane")).toBeAttached();
   const bounds = await map.boundingBox();
   if (!bounds) throw new Error("Missing map");
+  const [near, far] = [0.47, 0.53];
   for (const [x, y] of [
-    [0.2, 0.2],
-    [0.4, 0.2],
-    [0.4, 0.4],
-    [0.2, 0.4],
+    [near, near],
+    [far, near],
+    [far, far],
+    [near, far],
   ])
     await map.click({
       position: { x: bounds.width * x, y: bounds.height * y },

@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { UserPlus, Shield, Camera, Layers, Settings } from "lucide-react";
+import { UserPlus, Shield, Camera, Settings } from "lucide-react";
 import { api } from "../lib/api";
+import { BoundaryEditor } from "./BoundaryEditor";
 
 export function Admin({
   sites,
@@ -17,7 +18,6 @@ export function Admin({
   const [busy, setBusy] = useState(false);
   const [provider, setProvider] = useState("ollama");
   const [audit, setAudit] = useState<any[]>([]);
-  const [editingSite, setEditingSite] = useState("");
   const [person, setPerson] = useState({
     username: "",
     password: "",
@@ -30,14 +30,6 @@ export function Admin({
     site_id: sites[0]?.id || "",
     kind: "employee",
     active: true,
-  });
-  const [site, setSite] = useState({
-    name: "",
-    timezone: "Europe/Moscow",
-    west: 37.615,
-    east: 37.62,
-    south: 55.75,
-    north: 55.753,
   });
   const refresh = () => {
     api<any[]>("/people")
@@ -319,119 +311,8 @@ export function Admin({
             </button>
           )}
         </section>
-        <section className="panel">
-          <div className="section-heading">
-            <h2>Границы объекта</h2>
-            <Layers size={22} />
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!(site.west < site.east && site.south < site.north)) {
-                onError("Запад должен быть меньше востока, юг — меньше севера");
-                return;
-              }
-              const boundary = {
-                type: "Polygon",
-                coordinates: [
-                  [
-                    [site.west, site.south],
-                    [site.east, site.south],
-                    [site.east, site.north],
-                    [site.west, site.north],
-                    [site.west, site.south],
-                  ],
-                ],
-              };
-              void run(() =>
-                api(editingSite ? `/sites/${editingSite}` : "/sites", {
-                  method: editingSite ? "PUT" : "POST",
-                  body: JSON.stringify({
-                    name: site.name,
-                    timezone: site.timezone,
-                    boundary,
-                  }),
-                }),
-              );
-            }}
-          >
-            <label>
-              Объект
-              <select
-                value={editingSite}
-                onChange={(e) => {
-                  setEditingSite(e.target.value);
-                  const selected = sites.find((s) => s.id === e.target.value);
-                  if (!selected) {
-                    setSite({ ...site, name: "" });
-                    return;
-                  }
-                  const points = selected.boundary.coordinates[0];
-                  setSite({
-                    name: selected.name,
-                    timezone: selected.timezone,
-                    west: Math.min(...points.map((p: number[]) => p[0])),
-                    east: Math.max(...points.map((p: number[]) => p[0])),
-                    south: Math.min(...points.map((p: number[]) => p[1])),
-                    north: Math.max(...points.map((p: number[]) => p[1])),
-                  });
-                }}
-              >
-                <option value="">Создать новый объект</option>
-                {sites.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Название
-              <input
-                required
-                value={site.name}
-                onChange={(e) => setSite({ ...site, name: e.target.value })}
-              />
-            </label>
-            <label>
-              Часовой пояс
-              <input
-                value={site.timezone}
-                onChange={(e) => setSite({ ...site, timezone: e.target.value })}
-              />
-            </label>
-            <div className="field-grid">
-              {(["west", "east", "south", "north"] as const).map((key) => (
-                <label key={key}>
-                  {
-                    {
-                      west: "Запад",
-                      east: "Восток",
-                      south: "Юг",
-                      north: "Север",
-                    }[key]
-                  }
-                  <input
-                    type="number"
-                    step="0.000001"
-                    value={site[key]}
-                    onChange={(e) =>
-                      setSite({ ...site, [key]: Number(e.target.value) })
-                    }
-                  />
-                </label>
-              ))}
-            </div>
-            <button className="primary" disabled={busy}>
-              {editingSite ? "Сохранить границы" : "Создать объект и хранилище"}
-            </button>
-            <p className="small muted">
-              Граница задаётся прямоугольником WGS84. Изменение отзовёт суточные
-              QR объекта. Зоны рисуются отдельно в редакторе схемы.
-            </p>
-          </form>
-        </section>
       </div>
+      <BoundaryEditor sites={sites} busy={busy} run={run} onError={onError} />
       <section className="panel">
         <div className="section-heading">
           <h2>Пользователи</h2>
